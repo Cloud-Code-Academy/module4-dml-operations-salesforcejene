@@ -217,9 +217,7 @@ public with sharing class DMLOperations {
 	 */
 	public static Account upsertAccount(String accountName) {
 		// Query for the Account
-		List<Account> accountsList = [SELECT Id, Name, Description FROM Account WHERE Name = :accountName];
-        // Account account = [SELECT Id, Name, Description FROM Account WHERE Name = :accountName LIMIT 1];
-        
+		List<Account> accountsList = [SELECT Id, Name, Description FROM Account WHERE Name = :accountName];        
         //instantiate account object to be used for either new or existing account
         Account myAcc;
 
@@ -248,60 +246,74 @@ public with sharing class DMLOperations {
 	 * @param contactsToUpsert List of Contacts to be upserted and linked to accounts.
 	 */
 	public static void upsertAccountsWithContacts(List<Contact> contactsToUpsert) {
-        
-		//generate a map to hold Acct names based on Contact's Last Name
-        Map <String,Account> accountMap = new Map <String,Account>();
-        
-        //Store unique Contact Last Names to upsert later
-        Set<String> lastNamesSet = new Set <String>();
+        //adding container to store unique last names
+        Set <String> lastNames = New Set <String>();
 
-        // Extract the Account Name from Contact's LastName by looping through each Contact
-        for (Contact con : contactsToUpsert){
-            if (con.LastName != null) {
-                lastNamesSet.add(con.LastName);
+        //verify whether there is data in the list
+        if (contactsToUpsert == null){
+            system.debug('The contactsToUpsert list is null.');
+            return;
+        } else if (contactsToUpsert.isEmpty()){
+            system.debug('The contactsToUpsert list is empty.');
+        } else {
+            System.debug('Here are the contents of the contactsToUpsert list: ' + contactsToUpsert);
+            System.debug('Here are the # of contactsToUpsert list: ' + contactsToUpsert.size());   
+        }
+    
+
+		// Loop through each Contact; add to lastNames set
+        for (Contact c : contactsToUpsert){
+            if (String.isNotBlank(c.LastName)) {
+                lastNames.add(c.LastName);
+            }                
+        }
+        //adding containers to store existing Accounts
+        Map <String,Account> existAccountsMap = new Map <String,Account>();
+        
+		// Extract the Account Name from Contact's LastName
+        if (!lastNames.isEmpty()){
+            List<Account> existingAccounts = [SELECT Id, Name FROM Account WHERE Name IN: lastNames];  //query accounts that match the contacts' last name
+            for (Account a : existingAccounts){
+                existAccountsMap.put(a.Name, a); //store each match in the existingAccountsMap
             }
         }
 
-        // Get the account based on the name or create one if it doesn't exist
-        if (!lastNamesSet.isEmpty()){
-            for (Account acc: [SELECT Id, Name FROM Account WHERE Name IN :lastNamesSet]) {
-                accountMap.put(acc.Name, acc);
-            }
-        }
+		// Get the account based on the name or create one if it doesn't exist
+        List<Account> accountsToUpsert = new List<Account>();
 
 		// Link the Contact to its Account using the Account Id
-        List<Account> accountsToInsert = new List<Account>();
-		
-        For (Contact con : contactsToUpsert){
-            if (con.LastName != null){
-                //Does the account already exist?
-                if (!accountMap.containsKey(con.LastName)){
+        for (Contact c: contactsToUpsert){
+            if (String.isNotBlank(c.LastName)){
+                Account matchingAccount = existAccountsMap.get(c.LastName);
 
-                    //generate new acct
-                    Account newAcct = new Account (Name = con.LastName);   
-                    accountsToInsert.add(newAcct);
-                    accountMap.put(con.LastName, newAcct);
-                }
-                //Link the contact to the Account            
-                con.AccountId = accountMap.get(con.LastName).Id;
-            }            
-        }
-        //Insert the new Accounts
-        if (!accountsToInsert.isEmpty()) {
-            insert accountsToInsert;
-
-            //Update the account map with newly created IDs of the new Accts
-            for (Account acc : accountsToInsert) {
-                accountMap.put(acc.Name, acc);
-            }
-            //Re-link the contacts wth newly generated Accounts
-            for (Contact con : contactsToUpsert){
-                if (con.LastName != null) {
-                    con.AccountId = accountMap.get(con.LastName).Id;
+                //if an account matching contact lastName doesn't exist, generate a new one
+                if (matchingAccount == null){
+                    matchingAccount = new Account (Name = c.LastName);
+                    accountsToUpsert.add(matchingAccount);
+                    existAccountsMap.put(c.LastName, matchingAccount);
                 }
             }
         }
-	    // Upsert the Contacts
+        // Upsert Accounts first
+        if (!accountsToUpsert.isEmpty()){
+            upsert accountsToUpsert;
+        } 
+        
+        //Update Contact's AccountId after accounts are inserted/upserted
+        for (Contact con : contactsToUpsert){
+            if (String.isNotBlank(con.lastName)){
+                Account matchingAccount = existAccountsMap.get(con.lastName);
+                if (matchingAccount != null){                    
+                    //Link the contact to the account
+                    con.AccountId = matchingAccount.Id;
+                }
+            }
+        }
+
+        // Upsert the Contacts
+        if (!contactsToUpsert.isEmpty()){
+            upsert contactsToUpsert;
+        }
     }
 
     /**
@@ -310,11 +322,37 @@ public with sharing class DMLOperations {
      * @param leadNames The list of Lead names to be inserted.
      */
     public static void insertAndDeleteLeads(List<String> leadNames) {
+        //Use container to store unique Leads
+        List <Lead> uniqueLeads = new List <Lead>();
+
         // Loop through each Lead name
+        if (leadNames == null || leadNames.isEmpty()){
+            System.debug('There are no leads!');
+            return;            
+        }
+        for (String l : leadNames){
+            System.debug('Contents of list: ' + l);
+            //add value of leadNames to uniqueLeads
+            //AAHH I needed a new sObject!!
+            Lead addLead = new Lead (LastName = l, Company = 'Sample Co');
+            uniqueLeads.add(addLead);
+        }            
+        
 
         // Insert the Leads
+        System.debug('Here are the Leads to be inserted ' + leadNames);
+        System.debug('Total of ' + leadNames.size() + ' Leads');
+        insert uniqueLeads;
+        System.debug('Leads inserted ' + leadNames);
 
         // Delete the Leads
+        try {
+            System.debug('Leads to be deleted are: ' + leadNames);
+            System.debug('Total # of leads to delete: ' + uniqueLeads);
+            delete uniqueLeads;
+        } catch (DmlException e){
+            System.debug('Deleting the Leads Failed, review and try again.' + e.getMessage());
+        }
     }
 
 
@@ -324,9 +362,28 @@ public with sharing class DMLOperations {
      * @param accountId The account for which the cases will be created and then deleted.
      * @param numOfCases The number of cases to create.
      */
-    public static void createAndDeleteCases(String accountId, Integer numOfCases) {
-        // Insert the cases
+    public static void createAndDeleteCases(String accountId, Integer numOfCases) {                
 
-        // Delete the cases
+        // Insert the cases
+        List <Case> addCases = new List<Case>();
+
+        //updating loop to an iterative loop.
+
+        for (Integer i = 0; numOfCases > i; i++){
+
+            Case newCase = new Case(Subject = 'Auto Generated from Code ' + i, Priority = 'High');
+            addCases.add(newCase);
+            newCase.AccountId = accountId;
+            //validate
+            System.debug('Inside Cases loop');
+        }
+        insert addCases;
+        System.debug('Insert Outside Cases loop');
+
+        // // Delete the cases
+        if (addCases.size() >= 0){
+            System.debug('Before deletion, there were ' + addCases.size() + 'Cases');
+            delete addCases;
+        }
     }
 }
