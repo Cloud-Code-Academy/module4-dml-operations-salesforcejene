@@ -5,6 +5,51 @@
 // You can also execute the entire file by running the command:
 //     SFDX: Execute Anonymous Apex with Editor Contents
 
-string tempvar = 'Enter_your_name_here';
+String tempvar = 'Jene T.';
 System.debug('Hello World!');
 System.debug('My name is ' + tempvar);
+
+    /* upsert account 
+    if no acc, insert acct w description 'New Account'
+    otherwise update desc w 'Update Account'*/
+
+
+    String accountName = 'J Test Account';
+    List <Account> accList = [SELECT Id, Name, Description FROM Account WHERE Name = :accountName];
+    System.debug('Query has '+ accList.size() +  ' results: ');
+    System.debug('Query has '+ accList.size() +  ' results: ');
+
+    //build new object instance to take action
+    Account myAcct;
+    
+    
+    //does record exist, update description
+    if (accList.isEmpty()){
+        myAcct = new Account (Name = accountName);
+        myAcct.Description = 'New Account';
+        System.debug('New Acct Descr is: '  + myAcct.Description);
+        System.debug('Acct Id is: '         + myAcct.Id);
+
+    } else {
+        myAcct = accList[0];
+        myAcct.Description = 'Updated Account';
+        System.debug('New Acct Descr is: ' + myAcct.Description);
+        System.debug('Acct Id is: '        + myAcct.Id);
+    }
+    upsert myAcct;
+
+    System.debug('The Description is '  + myAcct.Description);
+    System.debug('The Account Name is ' + myAcct.Name);
+    System.debug('Acct Id is: '         + myAcct.Id);
+
+String conLastName = 'Fuller';
+List <Contact> conList = [SELECT Id, FirstName, LastName, Account.Name, AccountId FROM Contact WHERE Account.Name = :conLastName];
+System.debug('Contacts returned: ' + conList);
+System.debug('Query has '+ conList.size() +  ' result(s): ');
+
+//Add new Account based on Contact's Last Name
+//find contacts where lastName does not equal Account name
+List <Contact> cList = [SELECT Id, FirstName, LastName, Account.Name, AccountId FROM Contact] WWHERE Account.Name IN (conLastName);
+System.debug('Contacts returned: ' + cList);
+System.debug('Query has '+ cList.size() +  ' result(s): ');
+
