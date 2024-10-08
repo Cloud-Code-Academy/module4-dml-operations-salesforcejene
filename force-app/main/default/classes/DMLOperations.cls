@@ -180,14 +180,18 @@ public with sharing class DMLOperations {
         // Create an Opportunity with the given name
         // Add the Opportunity to the list  
 
-        //Querying account to find a match, if no match, generate new account
-        //update this line to pass test.
-        Account acc = [SELECT Id, Name FROM Account WHERE Name = :accountName LIMIT 1];
-
-        if (acc == null){
+        //adding Account variable
+        Account acc;
+        //Querying account to find a match, if no match, generate new account. Using a list to verify whether a record exists
+        List <Account> accFind = [SELECT Id, Name FROM Account WHERE Name = :accountName LIMIT 1];
+        
+        if (accFind.isEmpty()){
             //Generate a new Account with the given name
             acc = new Account(Name = accountName);
             insert acc;
+        } else {
+            //use the matching record         
+            acc = accFind[0]; 
         }
 
         //Store opps in list
@@ -195,16 +199,19 @@ public with sharing class DMLOperations {
 
         //loop through each Opp
         for (String opp : oppNames) {
+            //instantiate opp object to add record
             Opportunity o   = new Opportunity();
-            o.Name      = opp;
-            o.StageName = 'Prospecting';
-            o.Amount    = 100000;
-            o.CloseDate = Date.today().addMonths(3);
-            o.AccountId = acc.Id;
+            o.Name          = opp;
+            o.StageName     = 'Prospecting';
+            o.Amount        = 100000;
+            o.CloseDate     = Date.today().addMonths(3);
+            o.AccountId     = acc.Id;
 
             //Add opps to list
+            System.debug('Total opps: ' + oppList.size() + ' inside loop');
             oppList.add(o);
         }
+        System.debug('Total opps: ' + oppList.size() + ' before upsert');
         upsert oppList;
     }
     
@@ -222,7 +229,7 @@ public with sharing class DMLOperations {
         //instantiate account object to be used for either new or existing account
         Account myAcc;
 
-		// if the does not Account exists, add the account and w new acct description
+		// if the Account does not exist, add the account and w new acct description
         if (accountsList.isEmpty()){
             myAcc = new Account (Name = accountName, Description = 'New Account');
             

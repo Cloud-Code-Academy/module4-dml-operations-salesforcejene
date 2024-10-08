@@ -42,3 +42,11 @@ if (addCases.size() >= 0){
     //count after deletion
     System.debug('After delete, there are ' + addCaes.size()  +' Cases remaining');
 }
+
+String accountName = 'My Test Account';
+    
+// Prepare the Opportunity names
+List<String> oppNames = new List<String>{ 'Opp 1', 'Opp 2', 'Opp 3' };
+
+// Call the method to test
+DMLOperations.upsertOpportunities(accountName, oppNames);
